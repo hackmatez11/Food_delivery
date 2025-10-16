@@ -6,51 +6,104 @@ import { assets } from "../../assets/frontend_assets/assets";
 
 const MyOrders = () => {
   const { url, token } = useContext(StoreContext);
-  const [data, setData] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [countdowns, setCountdowns] = useState({}); // remaining seconds per order
 
+  // Fetch orders from backend
   const fetchOrders = async () => {
-    const response = await axios.post(
-      url + "/api/order/userorders",
-      {},
-      { headers: { token } }
-    );
-    if (response.data.success) {
-      setData(response.data.data);
+    try {
+      const response = await axios.post(
+        url + "/api/order/userorders",
+        {},
+        { headers: { token } }
+      );
+      if (response.data.success) {
+        const data = response.data.data;
+        setOrders(data);
+
+        // Initialize countdowns based on startTime + etaMinutes
+    const initialCountdowns = {};
+data.forEach((order) => {
+  if (order.etaMinutes && order.startTime) {
+    const finishTime = new Date(order.startTime).getTime() + order.etaMinutes * 60000;
+    const remaining = Math.floor((finishTime - Date.now()) / 1000);
+    initialCountdowns[order._id] = remaining > 0 ? remaining : 0;
+  }
+});
+
+        setCountdowns(initialCountdowns);
+      }
+    } catch (err) {
+      console.error("Error fetching orders:", err);
     }
   };
 
+  // Update countdown every second
   useEffect(() => {
-    if (token) {
-      fetchOrders();
-    }
+    const interval = setInterval(() => {
+      setCountdowns((prev) => {
+        const updated = { ...prev };
+        Object.keys(updated).forEach((key) => {
+          if (updated[key] > 0) updated[key] -= 1;
+        });
+        return updated;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (token) fetchOrders();
   }, [token]);
+
+  // Format seconds to mm:ss
+  const formatTime = (seconds) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  };
+
   return (
     <div className="my-orders">
       <h2>Orders</h2>
       <div className="container">
-        {data.map((order, index) => {
-          return (
-            <div key={index} className="my-orders-order">
-              <img src={assets.parcel_icon} alt="" />
+        {orders.map((order, index) => (
+          <div key={index} className="my-orders-order">
+            <img src={assets.parcel_icon} alt="Order Parcel" />
+            <p>
+              {order.items.map((item, idx) => (
+                <span key={idx}>
+                  {item.name} X {item.quantity}
+                  {idx !== order.items.length - 1 ? ", " : ""}
+                </span>
+              ))}
+            </p>
+            <p>${order.amount}.00</p>
+            <p>items: {order.items.length}</p>
+            <p>
+              <span>&#x25cf;</span>
+              <b> {order.status}</b>
+            </p>
+
+            {/* 🔹 Persistent Countdown */}
+            {countdowns[order._id] > 0 ? (
               <p>
-                {order.items.map((item, index) => {
-                  if (index === order.items.length - 1) {
-                    return item.name + " X " + item.quantity;
-                  } else {
-                    return item.name + " X " + item.quantity + ",";
-                  }
-                })}
+                ⏱ Time Remaining: <b>{formatTime(countdowns[order._id])}</b> | 👨‍🍳 Chef #{order.assignedChef}
               </p>
-              <p>${order.amount}.00</p>
-              <p>items: {order.items.length}</p>
+            ) : order.status !== "Delivered" ? (
               <p>
-                <span>&#x25cf;</span>
-                <b> {order.status}</b>
+                ✅ Ready! | 👨‍🍳 Chef #{order.assignedChef}
               </p>
-              <button onClick={fetchOrders}>Track Order</button>
-            </div>
-          );
-        })}
+            ) : (
+              <p>
+                ✅ Delivered | 👨‍🍳 Chef #{order.assignedChef}
+              </p>
+            )}
+
+            <button onClick={fetchOrders}>Track Order</button>
+          </div>
+        ))}
       </div>
     </div>
   );

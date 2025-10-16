@@ -6,8 +6,9 @@ const foodSchema = new mongoose.Schema({
   price: { type: Number, required: true },
   image: { type: String, required: true },
   category: { type: String, required: true },
+  prepTime: { type: Number, required: true }, // ⏱️ in minutes
 });
 
-const foodModel=mongoose.models.food || mongoose.model("food",foodSchema);
+const foodModel = mongoose.models.food || mongoose.model("food", foodSchema);
 
 export default foodModel;
